@@ -150,7 +150,7 @@ class Nai2ApiPlugin(Star):
         return await self.imgr.save_image(image_bytes)
 
     @filter.command("nai")
-    async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr = ""):
+    async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr):
         """NovelAI 生图
 
         用法: /nai [尺寸] <提示词> [-p <预设>] [--artist <质量前缀>] [--negative <负面提示词>] [--seed <种子>]
@@ -161,7 +161,6 @@ class Nai2ApiPlugin(Star):
         # 注意：AstrBot 的 filter.command 已经把 wake_prefix（如 "/"）和 "nai" 前缀去除
         # 因此 args 就是命令后的完整原始文本，不需要再去除前缀
         args = args.strip() if args else ""
-        logger.debug("[Nai2API] nai 命令 args=%r", args)
 
         # 子命令：预设列表
         if args == "presets" or args == "预设" or args.startswith("presets ") or args.startswith("预设 "):
