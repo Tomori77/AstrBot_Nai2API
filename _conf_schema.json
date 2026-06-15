@@ -1,0 +1,126 @@
+{
+  "api_url": {
+    "description": "Nai2API 服务地址",
+    "hint": "填写你的 Nai2API 服务地址，例如 https://nai.sta1n.cn",
+    "type": "string",
+    "default": "https://nai.sta1n.cn"
+  },
+  "token": {
+    "description": "Nai2API 用户密钥",
+    "hint": "后台生成的 STA1N-xxx 用户密钥",
+    "type": "string",
+    "default": "",
+    "obvious_hint": true
+  },
+  "default_model": {
+    "description": "默认模型",
+    "hint": "NovelAI 模型名称",
+    "type": "string",
+    "options": ["nai-diffusion-4-5-full", "nai-diffusion-4-full", "nai-diffusion-3", "nai-diffusion-furry-3", "nai-diffusion-2", "safe-diffusion"],
+    "default": "nai-diffusion-4-5-full"
+  },
+  "default_size": {
+    "description": "默认图片尺寸",
+    "hint": "普通=1点，2K=15点，4K=25点",
+    "type": "string",
+    "options": ["竖图", "横图", "方图", "2K竖图", "2K横图", "2K方图", "4K竖图", "4K横图", "4K方图"],
+    "default": "竖图"
+  },
+  "default_steps": {
+    "description": "默认生成步数",
+    "hint": "步数越高质量越好但越慢，/generate 接口最高 28",
+    "type": "int",
+    "default": 28,
+    "slider": {
+      "min": 1,
+      "max": 28,
+      "step": 1
+    }
+  },
+  "default_scale": {
+    "description": "默认提示词引导值",
+    "hint": "即 Prompt guidance scale，推荐 5-7",
+    "type": "int",
+    "default": 6,
+    "slider": {
+      "min": 1,
+      "max": 30,
+      "step": 1
+    }
+  },
+  "default_cfg": {
+    "description": "默认缩放引导值 (CFG rescale)",
+    "hint": "NovelAI 的 CFG rescale 参数，0 到 1 之间，0 表示关闭",
+    "type": "float",
+    "default": 0,
+    "slider": {
+      "min": 0,
+      "max": 1,
+      "step": 0.1
+    }
+  },
+  "default_sampler": {
+    "description": "默认采样器",
+    "type": "string",
+    "options": ["k_dpmpp_2m_sde", "k_dpmpp_sde", "k_dpmpp_2m", "k_dpmpp_2s_ancestral", "k_euler", "k_euler_ancestral", "k_dpm_fast", "k_dpm_adaptive", "ddim"],
+    "default": "k_dpmpp_2m_sde"
+  },
+  "default_negative": {
+    "description": "默认负面提示词",
+    "hint": "使用 NovelAI 官方推荐的负面提示词，留空则不传",
+    "type": "text",
+    "default": "{{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},mutated hands,{{{mutation}}},normal quality,poorly drawn face,poorly drawn hands,signature,text,{{too many fingers}},{{{ugly}}},username,watermark,worst quality"
+  },
+  "default_artist": {
+    "description": "默认画师串/质量前缀",
+    "hint": "留空则不传画师串。Nai2API 默认使用 2.5D唯美风，可通过 -p 预设切换",
+    "type": "text",
+    "default": "0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,"
+  },
+  "default_noise_schedule": {
+    "description": "默认噪声调度",
+    "type": "string",
+    "options": ["karras", "native"],
+    "default": "karras"
+  },
+  "timeout": {
+    "description": "请求超时(秒)",
+    "hint": "Nai2API 生图可能需要较长时间，建议 120 秒以上",
+    "type": "int",
+    "default": 120,
+    "slider": {
+      "min": 30,
+      "max": 600,
+      "step": 10
+    }
+  },
+  "llm_tool_enabled": {
+    "description": "允许 LLM 调用生图",
+    "hint": "关闭后 LLM 无法调用 nai_generate 工具",
+    "type": "bool",
+    "default": true
+  },
+  "allow_2k": {
+    "description": "允许生成 2K 图片",
+    "hint": "关闭后使用 2K 尺寸会自动降级为普通尺寸，防止误扣 15 点",
+    "type": "bool",
+    "default": true
+  },
+  "allow_4k": {
+    "description": "允许生成 4K 图片",
+    "hint": "关闭后使用 4K 尺寸会自动降级为普通尺寸，防止误扣 25 点",
+    "type": "bool",
+    "default": true
+  },
+  "max_cached_images": {
+    "description": "图片最大缓存数",
+    "hint": "超过此数时清理旧缓存图",
+    "type": "int",
+    "default": 50,
+    "slider": {
+      "min": 10,
+      "max": 500,
+      "step": 1
+    }
+  }
+}
