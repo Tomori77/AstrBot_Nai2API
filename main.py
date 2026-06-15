@@ -150,7 +150,7 @@ class Nai2ApiPlugin(Star):
         return await self.imgr.save_image(image_bytes)
 
     @filter.command("nai")
-    async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr = ""):
+    async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr):
         """NovelAI 生图
 
         用法: /nai [尺寸] <提示词> [-p <预设>] [--artist <质量前缀>] [--negative <负面提示词>] [--seed <种子>]
