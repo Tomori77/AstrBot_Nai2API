@@ -6,6 +6,7 @@
 
 import asyncio
 import os
+import re
 import time
 from pathlib import Path
 
@@ -62,11 +63,20 @@ class ImageManager:
 
         return await self.save_image(data)
 
-    async def save_image(self, data: bytes) -> Path:
+    async def save_image(self, data: bytes, prompt: str | None = None) -> Path:
         """保存图片 bytes 到本地"""
-        # 根据文件头判断扩展名
         ext = _guess_ext(data)
-        filename = f"{int(time.time())}_{id(data) % 100000}.{ext}"
+
+        prefix = f"{int(time.time())}_{id(data) % 100000}"
+        if prompt and prompt.strip():
+            safe = _sanitize_prompt(prompt)
+            if safe:
+                filename = f"{prefix}_{safe}.{ext}"
+            else:
+                filename = f"{prefix}.{ext}"
+        else:
+            filename = f"{prefix}.{ext}"
+
         path = self.image_dir / filename
 
         async with aiofiles.open(path, "wb") as f:
@@ -116,3 +126,19 @@ def _guess_ext(data: bytes) -> str:
     if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
         return "webp"
     return "png"
+
+
+def _sanitize_prompt(prompt: str, max_len: int = 80) -> str:
+    """把提示词清洗成文件名安全的字符串"""
+    if not prompt:
+        return ""
+    # 去掉非法字符，保留中英文字母数字和常见符号
+    result = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", prompt)
+    # 连续空白/下划线合并成单下划线
+    result = re.sub(r'[\s_]+', "_", result)
+    # 去掉首尾的下划线
+    result = result.strip("_")
+    # 截断长度
+    if len(result) > max_len:
+        result = result[:max_len]
+    return result
