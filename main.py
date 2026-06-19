@@ -147,7 +147,7 @@ class Nai2ApiPlugin(Star):
         image_bytes = await self.client.generate(
             prompt, size=size, artist=artist, negative=negative, seed=seed
         )
-        return await self.imgr.save_image(image_bytes)
+        return await self.imgr.save_image(image_bytes, prompt=prompt)
 
     @filter.command("nai")
     async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr):
