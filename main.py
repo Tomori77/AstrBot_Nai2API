@@ -12,6 +12,7 @@ import mcp
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.message_components import Node, Plain
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core.star.filter.command import GreedyStr
 
@@ -135,6 +136,15 @@ class Nai2ApiPlugin(Star):
                 return resolved
         return None
 
+    def _forward_result(self, event: AstrMessageEvent, title: str, content: str):
+        """将查询结果以合并转发消息形式发送，不占用聊天空间"""
+        node = Node(
+            uin=int(event.get_sender_id()) if event.get_sender_id().isdigit() else 0,
+            name=event.message_obj.sender.nickname if hasattr(event.message_obj.sender, 'nickname') else "查询结果",
+            content=[Plain(f"{title}\n\n{content}")]
+        )
+        return event.chain_result([node])
+
     async def _do_generate(
         self,
         prompt: str,
@@ -147,7 +157,7 @@ class Nai2ApiPlugin(Star):
         image_bytes = await self.client.generate(
             prompt, size=size, artist=artist, negative=negative, seed=seed
         )
-        return await self.imgr.save_image(image_bytes, prompt=prompt)
+        return await self.imgr.save_image(image_bytes)
 
     @filter.command("nai")
     async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr):
@@ -231,27 +241,25 @@ class Nai2ApiPlugin(Star):
             enabled = data.get("enabled", True)
             note = data.get("note", "")
 
-            # 估算可生成次数（普通1点，2K 15点，4K 25点）
             balance_int = int(balance)
-            normal_count = balance_int  # 普通尺寸每次1点
+            normal_count = balance_int
             count_2k = balance_int // 15
             count_4k = balance_int // 25
 
             status = "正常" if enabled else "已禁用"
             lines = [
-                f"Nai2API 余额查询",
-                f"  剩余点数: {balance_int} 点",
-                f"  账号状态: {status}",
+                f"剩余点数: {balance_int} 点",
+                f"账号状态: {status}",
             ]
             if note:
-                lines.append(f"  备注: {note}")
-            lines.append(f"  ---")
-            lines.append(f"  预计可生成:")
-            lines.append(f"    普通尺寸(竖图/横图/方图): ~{normal_count} 张")
-            lines.append(f"    2K尺寸: ~{count_2k} 张")
-            lines.append(f"    4K尺寸: ~{count_4k} 张")
+                lines.append(f"备注: {note}")
+            lines.append(f"---")
+            lines.append(f"预计可生成:")
+            lines.append(f"  普通尺寸(竖图/横图/方图): ~{normal_count} 张")
+            lines.append(f"  2K尺寸: ~{count_2k} 张")
+            lines.append(f"  4K尺寸: ~{count_4k} 张")
 
-            return event.plain_result("\n".join(lines))
+            return self._forward_result(event, "Nai2API 余额查询", "\n".join(lines))
         except Exception as e:
             logger.error("[Nai2API] 查询余额失败: %s", e)
             return event.plain_result(f"查询余额失败: {e}")
@@ -266,10 +274,10 @@ class Nai2ApiPlugin(Star):
                 builtin_tag = " [内置]" if self.presets.is_builtin(preset_name) else ""
                 desc = info.get("desc", "")
                 artist_val = info.get("artist", "")
-                return event.plain_result(
-                    f"预设 '{preset_name}'{builtin_tag}：\n"
-                    f"描述: {desc}\n"
-                    f"质量前缀:\n{artist_val}"
+                return self._forward_result(
+                    event,
+                    f"预设 '{preset_name}'{builtin_tag}",
+                    f"描述: {desc}\n质量前缀:\n{artist_val}"
                 )
             else:
                 return event.plain_result(f"预设 '{preset_name}' 不存在，使用 /nai presets 查看可用预设")
@@ -277,18 +285,18 @@ class Nai2ApiPlugin(Star):
         if not all_presets:
             return event.plain_result("暂无预设")
 
-        lines = ["可用预设列表：\n"]
+        lines = []
         for name, info in all_presets.items():
             builtin_tag = " [内置]" if self.presets.is_builtin(name) else ""
             desc = info.get("desc", "")
             artist_val = info.get("artist", "")
-            lines.append(f"  {name}{builtin_tag} - {desc}")
-            lines.append(f"    {artist_val[:80]}{'...' if len(artist_val) > 80 else ''}")
+            lines.append(f"{name}{builtin_tag} - {desc}")
+            lines.append(f"  {artist_val[:80]}{'...' if len(artist_val) > 80 else ''}")
             lines.append("")
 
         lines.append("使用: /nai -p <预设名> <提示词>")
         lines.append("查看单个预设详情: /nai presets <预设名>")
-        return event.plain_result("\n".join(lines))
+        return self._forward_result(event, "可用预设列表", "\n".join(lines))
 
     def _handle_save_preset(self, event: AstrMessageEvent, args: str):
         """保存自定义预设"""
@@ -401,20 +409,19 @@ class Nai2ApiPlugin(Star):
 
             status = "正常" if enabled else "已禁用"
             lines = [
-                f"Nai2API 余额查询",
-                f"  剩余点数: {balance_int} 点",
-                f"  账号状态: {status}",
+                f"剩余点数: {balance_int} 点",
+                f"账号状态: {status}",
             ]
             if note:
-                lines.append(f"  备注: {note}")
-            lines.append(f"  ---")
-            lines.append(f"  预计可生成:")
-            lines.append(f"    普通尺寸(竖图/横图/方图): ~{normal_count} 张")
-            lines.append(f"    2K尺寸: ~{count_2k} 张")
-            lines.append(f"    4K尺寸: ~{count_4k} 张")
+                lines.append(f"备注: {note}")
+            lines.append(f"---")
+            lines.append(f"预计可生成:")
+            lines.append(f"  普通尺寸(竖图/横图/方图): ~{normal_count} 张")
+            lines.append(f"  2K尺寸: ~{count_2k} 张")
+            lines.append(f"  4K尺寸: ~{count_4k} 张")
 
             result_text = "\n".join(lines)
-            await event.send(event.plain_result(result_text))
+            await event.send(self._forward_result(event, "Nai2API 余额查询", result_text))
             return mcp.types.CallToolResult(
                 content=[mcp.types.TextContent(type="text", text=result_text)]
             )
@@ -439,8 +446,8 @@ class Nai2ApiPlugin(Star):
                 builtin_tag = " [内置]" if self.presets.is_builtin(preset_name) else ""
                 desc = info.get("desc", "")
                 artist_val = info.get("artist", "")
-                result_text = f"预设 '{preset_name}'{builtin_tag}：\n描述: {desc}\n质量前缀:\n{artist_val}"
-                await event.send(event.plain_result(result_text))
+                result_text = f"描述: {desc}\n质量前缀:\n{artist_val}"
+                await event.send(self._forward_result(event, f"预设 '{preset_name}'{builtin_tag}", result_text))
                 return mcp.types.CallToolResult(
                     content=[mcp.types.TextContent(type="text", text=result_text)]
                 )
@@ -456,14 +463,14 @@ class Nai2ApiPlugin(Star):
                 content=[mcp.types.TextContent(type="text", text="暂无预设")]
             )
 
-        lines = ["可用预设列表：\n"]
+        lines = []
         for name, info in all_presets.items():
             builtin_tag = " [内置]" if self.presets.is_builtin(name) else ""
             desc = info.get("desc", "")
-            lines.append(f"  {name}{builtin_tag} - {desc}")
+            lines.append(f"{name}{builtin_tag} - {desc}")
 
         result_text = "\n".join(lines)
-        await event.send(event.plain_result(result_text))
+        await event.send(self._forward_result(event, "可用预设列表", result_text))
         return mcp.types.CallToolResult(
             content=[mcp.types.TextContent(type="text", text=result_text)]
         )
