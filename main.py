@@ -18,27 +18,39 @@ from astrbot.core.star.filter.command import GreedyStr
 
 from .core.image_manager import ImageManager
 from .core.nai2api_client import Nai2ApiClient, DEFAULT_ARTIST, DEFAULT_NEGATIVE
+from .core.nsfw_checker import NsfwChecker
 from .core.preset_manager import PresetManager
+from .core.r2_uploader import R2Uploader
 
-# 解析用户输入中的尺寸前缀、-p/--preset、--artist 和 --negative 参数
+# 解析用户输入中的尺寸前缀、-p/--preset、--artist、--negative、--seed、--nsfw、--name 参数
 _SIZE_PATTERN = re.compile(
     r'^(2K竖图|2K横图|2K方图|4K竖图|4K横图|4K方图|竖图|横图|方图)\s+',
     re.IGNORECASE,
 )
 _PRESET_PATTERN = re.compile(r'(?:-p|--preset)\s+(\S+)', re.IGNORECASE)
 _SEED_PATTERN = re.compile(r'--seed\s+(\d+)', re.IGNORECASE)
-_ARTIST_PATTERN = re.compile(r'--artist\s+(.+?)(?=\s+(?:--negative|-p|--preset|--seed)\s+|$)', re.DOTALL)
-_NEGATIVE_PATTERN = re.compile(r'--negative\s+(.+?)(?=\s+(?:--artist|-p|--preset|--seed)\s+|$)', re.DOTALL)
+_ARTIST_PATTERN = re.compile(r'--artist\s+(.+?)(?=\s+(?:--negative|-p|--preset|--seed|--name)\s+|\s+--nsfw\b|$)', re.DOTALL)
+_NEGATIVE_PATTERN = re.compile(r'--negative\s+(.+?)(?=\s+(?:--artist|-p|--preset|--seed|--name)\s+|\s+--nsfw\b|$)', re.DOTALL)
+_NAME_PATTERN = re.compile(r'--name\s+(.+?)(?=\s+(?:--artist|--negative|-p|--preset|--seed)\s+|\s+--nsfw\b|$)', re.DOTALL)
+_NSFW_FLAG_PATTERN = re.compile(r'--nsfw\b', re.IGNORECASE)
+
+# 简称提取时的过滤词（数量/质量修饰词，不作为简称）
+_SHORT_NAME_STOPWORDS = {
+    "1girl", "2girls", "3girls", "1boy", "2boys", "1woman", "2women",
+    "best", "quality", "absurdres", "masterpiece", "aesthetic",
+    "detailed", "highres", "ultrares", "4k", "8k", "year", "realistic",
+    "very", "extremely", "highly", "no", "text",
+}
 
 
-def _parse_nai_command(text: str) -> tuple[str | None, str, str | None, str | None, str | None, int | None]:
+def _parse_nai_command(text: str) -> tuple[str | None, str, str | None, str | None, str | None, int | None, bool, str | None]:
     """
     解析 /nai 指令的参数。
 
-    格式: /nai [尺寸] <提示词> [-p <预设>] [--artist <质量前缀>] [--negative <负面提示词>] [--seed <种子>]
+    格式: /nai [尺寸] <提示词> [-p <预设>] [--artist <质量前缀>] [--negative <负面提示词>] [--seed <种子>] [--nsfw] [--name <简称>]
 
     Returns:
-        (size, prompt, preset_name, artist, negative, seed)
+        (size, prompt, preset_name, artist, negative, seed, nsfw_flag, name)
     """
     text = text.strip()
     size = None
@@ -77,8 +89,47 @@ def _parse_nai_command(text: str) -> tuple[str | None, str, str | None, str | No
         artist = m.group(1).strip()
         text = text[:m.start()] + text[m.end():]
 
+    # 先提取 NSFW 标记（仅标记，不消耗值），避免污染后续 --name 解析
+    nsfw_flag = bool(_NSFW_FLAG_PATTERN.search(text))
+    if nsfw_flag:
+        text = _NSFW_FLAG_PATTERN.sub("", text)
+
+    # 提取简称
+    name = None
+    m = _NAME_PATTERN.search(text)
+    if m:
+        name = m.group(1).strip()
+        text = text[:m.start()] + text[m.end():]
+
     prompt = text.strip()
-    return size, prompt, preset_name, artist, negative, seed
+    return size, prompt, preset_name, artist, negative, seed, nsfw_flag, name
+
+
+def _extract_short_name(prompt: str) -> str:
+    """
+    从提示词自动提取简称。
+
+    规则: 按逗号分割，取第一个非数量/质量修饰词的标签，去空格，截断到 8 字符。
+    提取不到则返回 'img'。
+    """
+    if not prompt:
+        return "img"
+
+    for tag in prompt.split(","):
+        tag = tag.strip()
+        if not tag:
+            continue
+        low = tag.lower()
+        if low in _SHORT_NAME_STOPWORDS:
+            continue
+        if low.replace(".", "").isdigit():
+            continue
+        name = tag.replace(" ", "")
+        if len(name) > 8:
+            name = name[:8]
+        return name
+
+    return "img"
 
 
 class Nai2ApiPlugin(Star):
@@ -92,7 +143,7 @@ class Nai2ApiPlugin(Star):
         api_url = str(config.get("api_url", "https://nai.sta1n.cn")).strip()
         token = str(config.get("token", "")).strip()
         timeout = int(config.get("timeout", 120))
-        max_cached = int(config.get("max_cached_images", 50))
+        max_cached = int(config.get("max_cached_images", 30))
 
         self.client = Nai2ApiClient(
             api_url=api_url,
@@ -121,10 +172,26 @@ class Nai2ApiPlugin(Star):
 
         self._llm_tool_enabled = bool(config.get("llm_tool_enabled", True))
 
+        # NSFW → 图床链接
+        self._nsfw_to_link = bool(config.get("nsfw_to_link", True))
+        self.nsfw_checker = NsfwChecker(
+            custom_keywords=str(config.get("nsfw_keywords", "")),
+        )
+        self.r2 = R2Uploader(
+            access_key_id=str(config.get("r2_access_key_id", "")),
+            secret_access_key=str(config.get("r2_secret_access_key", "")),
+            s3_endpoint=str(config.get("r2_s3_endpoint", "")),
+            bucket=str(config.get("r2_bucket", "")),
+            public_base_url=str(config.get("r2_public_base_url", "")),
+            storage_prefix=str(config.get("r2_storage_prefix", "qbotimage")),
+            max_cached=int(config.get("r2_max_cached", 30)),
+        )
+
     async def terminate(self):
         """插件卸载时清理资源"""
         await self.client.close()
         await self.imgr.close()
+        await self.r2.close()
 
     def _resolve_artist(self, preset_name: str | None, artist: str | None) -> str | None:
         """解析 artist：预设优先，--artist 覆盖预设"""
@@ -152,12 +219,52 @@ class Nai2ApiPlugin(Star):
         artist: str | None = None,
         negative: str | None = None,
         seed: int | None = None,
-    ) -> Path:
-        """执行生图并返回本地图片路径"""
-        image_bytes = await self.client.generate(
+    ) -> bytes:
+        """执行生图并返回图片二进制"""
+        return await self.client.generate(
             prompt, size=size, artist=artist, negative=negative, seed=seed
         )
-        return await self.imgr.save_image(image_bytes)
+
+    async def _handle_output(
+        self,
+        event: AstrMessageEvent,
+        image_bytes: bytes,
+        prompt: str,
+        nsfw_flag: bool,
+        name: str | None,
+    ):
+        """
+        根据 NSFW 判定分流输出。
+
+        - 安全图（或功能关）: 本地落盘 + 直接发图
+        - NSFW 图 + 功能开 + R2 已配: 上传 R2 + 发链接 + 提示词摘要
+        - NSFW 图 + 功能开 + R2 未配: 提示并丢弃
+        """
+        is_nsfw = self.nsfw_checker.check(prompt, nsfw_flag)
+
+        if not is_nsfw or not self._nsfw_to_link:
+            path = await self.imgr.save_image(image_bytes)
+            return event.image_result(str(path))
+
+        if not self.r2.is_configured():
+            logger.warning("[Nai2API] NSFW 图片命中但 R2 未配置，丢弃")
+            return event.plain_result(
+                "⚠️ 该图片被判定为 NSFW，但未配置 Cloudflare R2 图床，已拦截不发送。\n"
+                "请在插件配置中填写 R2 凭证（r2_access_key_id / r2_secret_access_key / r2_s3_endpoint / r2_bucket / r2_public_base_url）后重试。"
+            )
+
+        short_name = name if name else _extract_short_name(prompt)
+
+        try:
+            url = await self.r2.upload(image_bytes, short_name)
+            await self.r2.cleanup()
+            preview = prompt.strip()[:80]
+            return event.plain_result(
+                f"🔞 NSFW 图片已上传图床：\n{url}\n\n提示词：{preview}"
+            )
+        except Exception as e:
+            logger.error("[Nai2API] R2 上传失败: %s", e)
+            return event.plain_result(f"NSFW 图片上传图床失败: {e}")
 
     @filter.command("nai")
     async def nai_generate(self, event: AstrMessageEvent, args: GreedyStr):
@@ -194,7 +301,7 @@ class Nai2ApiPlugin(Star):
         # 无参数时显示帮助
         if not args:
             return event.plain_result(
-                "用法: /nai [尺寸] <提示词> [-p <预设>] [--artist <质量前缀>] [--negative <负面提示词>]\n"
+                "用法: /nai [尺寸] <提示词> [-p <预设>] [--artist <质量前缀>] [--negative <负面提示词>] [--seed <种子>] [--nsfw] [--name <简称>]\n"
                 "预设: /nai presets(预设) | /nai save(保存) <名称> <质量前缀> | /nai del(删除) <名称>\n"
                 "余额: /nai balance(余额/点数/次数)\n"
                 "尺寸: 竖图|横图|方图|2K竖图|2K横图|2K方图|4K竖图|4K横图|4K方图\n\n"
@@ -205,6 +312,7 @@ class Nai2ApiPlugin(Star):
                 "  /nai 1girl --artist best quality, absurdres\n"
                 "  /nai 1girl --negative bad anatomy, bad hands\n"
                 "  /nai 1girl --seed 12345\n"
+                "  /nai 1girl, nude --nsfw --name 猫娘\n"
                 "  /nai save 我的预设 best quality, absurdres, detailed\n"
                 "  /nai 保存 我的预设 best quality, absurdres, detailed\n"
                 "  /nai del 我的预设\n"
@@ -212,7 +320,7 @@ class Nai2ApiPlugin(Star):
                 "  /nai balance"
             )
 
-        size, prompt, preset_name, artist, negative, seed = _parse_nai_command(args)
+        size, prompt, preset_name, artist, negative, seed, nsfw_flag, name = _parse_nai_command(args)
 
         if not prompt:
             return event.plain_result("提示词不能为空")
@@ -225,10 +333,10 @@ class Nai2ApiPlugin(Star):
             return event.plain_result(f"预设 '{preset_name}' 不存在，使用 /nai presets 查看可用预设")
 
         try:
-            image_path = await self._do_generate(
+            image_bytes = await self._do_generate(
                 prompt, size=size, artist=final_artist, negative=negative, seed=seed
             )
-            return event.image_result(str(image_path))
+            return await self._handle_output(event, image_bytes, prompt, nsfw_flag, name)
         except Exception as e:
             logger.error("[Nai2API] 生图失败: %s", e)
             return event.plain_result(f"生图失败: {e}")
@@ -341,6 +449,8 @@ class Nai2ApiPlugin(Star):
         negative: str = "",
         preset: str = "",
         seed: int = 0,
+        nsfw: bool = False,
+        name: str = "",
     ):
         """使用 NovelAI 生成图片。
 
@@ -351,6 +461,8 @@ class Nai2ApiPlugin(Star):
             negative(string): 负面提示词，留空使用默认
             preset(string): 预设名称，例如 "高质量"、"动漫风"，留空使用默认
             seed(int): 随机种子，0 表示自动随机，相同种子可复现图片
+            nsfw(bool): 是否标记为 NSFW，True 时图片走图床链接而非直接发送
+            name(string): 图片简称，用于 R2 命名，留空则自动从 prompt 提取
         """
         if not self._llm_tool_enabled:
             return mcp.types.CallToolResult(
@@ -368,7 +480,7 @@ class Nai2ApiPlugin(Star):
         )
 
         try:
-            image_path = await self._do_generate(
+            image_bytes = await self._do_generate(
                 prompt.strip(),
                 size=size.strip() or None,
                 artist=final_artist,
@@ -376,12 +488,17 @@ class Nai2ApiPlugin(Star):
                 seed=seed if seed else None,
             )
 
-            await event.send(event.image_result(str(image_path)))
+            result = await self._handle_output(
+                event, image_bytes, prompt.strip(), nsfw, name.strip() or None,
+            )
+            await event.send(result)
 
+            is_nsfw = self.nsfw_checker.check(prompt.strip(), nsfw)
+            tag = "NSFW 图床链接" if is_nsfw and self._nsfw_to_link else "图片"
             return mcp.types.CallToolResult(
                 content=[mcp.types.TextContent(
                     type="text",
-                    text=f"图片已生成并发送给用户。提示词: {prompt.strip()[:100]}"
+                    text=f"{tag}已生成并发送给用户。提示词: {prompt.strip()[:100]}"
                 )]
             )
         except Exception as e:

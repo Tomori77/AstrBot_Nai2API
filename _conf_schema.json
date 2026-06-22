@@ -113,12 +113,73 @@
     "default": true
   },
   "max_cached_images": {
-    "description": "图片最大缓存数",
-    "hint": "超过此数时清理旧缓存图",
+    "description": "本地图片最大缓存数",
+    "hint": "超过此数时清理旧缓存图（NSFW 走图床，非 NSFW 走本地）",
     "type": "int",
-    "default": 50,
+    "default": 30,
     "slider": {
       "min": 10,
+      "max": 500,
+      "step": 1
+    }
+  },
+  "nsfw_to_link": {
+    "description": "NSFW 图片转图床链接",
+    "hint": "开启后命中 NSFW 的图片不会直接发送，而是上传 Cloudflare R2 并发送链接",
+    "type": "bool",
+    "default": true
+  },
+  "nsfw_keywords": {
+    "description": "NSFW 关键词",
+    "hint": "提示词命中任一关键词即视为 NSFW，逗号分隔，与内置词表合并判定，留空则仅用内置词表。内置已含 nsfw/nude/porn/sex/breast/penis/vagina/cum/blowjob/rape/裸体/露点/色情/性交/做爱/内射/口交/本子/工口 等，自定义词会在此基础上补充",
+    "type": "text",
+    "default": ""
+  },
+  "r2_access_key_id": {
+    "description": "R2 访问密钥 ID",
+    "hint": "Cloudflare R2 的 Access Key ID，留空则 NSFW 图将被丢弃",
+    "type": "string",
+    "default": "",
+    "obvious_hint": true
+  },
+  "r2_secret_access_key": {
+    "description": "R2 机密访问密钥",
+    "hint": "Cloudflare R2 的 Secret Access Key",
+    "type": "string",
+    "default": "",
+    "obvious_hint": true
+  },
+  "r2_s3_endpoint": {
+    "description": "R2 S3 终结点",
+    "hint": "管辖权特定的 S3 终结点，如 https://<accountid>.r2.cloudflarestorage.com",
+    "type": "string",
+    "default": ""
+  },
+  "r2_bucket": {
+    "description": "R2 存储桶名",
+    "hint": "Cloudflare R2 存储桶名称",
+    "type": "string",
+    "default": ""
+  },
+  "r2_public_base_url": {
+    "description": "R2 公开访问基址",
+    "hint": "绑定域名如 https://img.example.com，或 R2 默认 https://pub-xxx.r2.dev",
+    "type": "string",
+    "default": ""
+  },
+  "r2_storage_prefix": {
+    "description": "R2 存储目录",
+    "hint": "R2 对象前缀目录，默认 qbotimage",
+    "type": "string",
+    "default": "qbotimage"
+  },
+  "r2_max_cached": {
+    "description": "R2 图片最大缓存数",
+    "hint": "超过此数时清理最旧图片",
+    "type": "int",
+    "default": 30,
+    "slider": {
+      "min": 5,
       "max": 500,
       "step": 1
     }
