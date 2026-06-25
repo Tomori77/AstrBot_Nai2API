@@ -175,7 +175,7 @@ class Nai2ApiPlugin(Star):
         # NSFW → 图床链接
         self._nsfw_to_link = bool(config.get("nsfw_to_link", True))
         self.nsfw_checker = NsfwChecker(
-            custom_keywords=str(config.get("nsfw_keywords", "")),
+            keywords=str(config.get("nsfw_keywords", "")),
         )
         self.r2 = R2Uploader(
             access_key_id=str(config.get("r2_access_key_id", "")),

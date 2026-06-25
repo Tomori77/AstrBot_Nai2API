@@ -1,5 +1,17 @@
 # 更新日志
 
+## v1.1.0
+
+- NSFW 自动检测 — 关键词命中或 `--nsfw` 标记的图片自动上传 Cloudflare R2 图床并发送链接
+- 私聊/群聊白名单 — 限制指定 QQ 号或群号使用插件
+- NSFW 关键词改为完全由配置项管理，预填完整词表到配置框，去除了生图场景中易误伤的词（chest/屁股/riding/bare skin/revealing）
+- 图片上传改用 `boto3 + asyncio.to_thread`，彻底消除 `aiobotocore` 与 `botocore` 版本不兼容的问题
+- nai_generate 工具 docstring 增加"调用时必须同时说话"约束
+- `--nsfw` / `--name` 指令参数支持
+- R2 上传 + 清理（保留 N 张删最旧）
+- 本地缓存默认值 `50` → `30`
+- README 更新，新增鸣谢原作者章节
+
 ## v1.0.6
 
 - 修复合并转发消息功能丢失的问题（合并分支时被覆盖）

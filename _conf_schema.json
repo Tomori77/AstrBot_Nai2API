@@ -131,9 +131,9 @@
   },
   "nsfw_keywords": {
     "description": "NSFW 关键词",
-    "hint": "提示词命中任一关键词即视为 NSFW，逗号分隔，与内置词表合并判定，留空则仅用内置词表。内置已含 nsfw/nude/porn/sex/breast/penis/vagina/cum/blowjob/rape/裸体/露点/色情/性交/做爱/内射/口交/本子/工口 等，自定义词会在此基础上补充",
+    "hint": "提示词命中任一关键词即视为 NSFW，逗号分隔。可直接在此编辑增删，为空则仅 --nsfw 显式标记生效",
     "type": "text",
-    "default": ""
+    "default": "nsfw,nude,nudity,nudes,completely nude,explicit,porn,pornographic,xxx,18+,uncensored,naked,topless,bottomless,nipples,areolae,oppai,penis,dick,cock,vagina,pussy,anus,anal,testicles,balls,clitoris,clit,cameltoe,sex,sexual,intercourse,penetration,double penetration,cum,creampie,ejaculation,cum in mouth,cum on face,bukkake,swallowing,masturbation,orgasm,pussy juice,blowjob,fellatio,handjob,paizuri,titfuck,cunnilingus,deepthroat,rimjob,fingering,fisting,gangbang,threesome,group sex,orgy,missionary,doggystyle,cowgirl,spread legs,spread pussy,dildo,vibrator,sex toy,bondage,bdsm,restrained,hentai,ecchi,smut,lewd,futanari,futa,dickgirl,tentacle,tentacles,rape,lactation,pregnant,peeing,urination,ahegao,mind control,裸体,裸照,全裸,露点,裸露,色情,成人,性器,性交,阴茎,肉棒,阴道,小穴,内裤,性玩具,做爱,自慰,高潮,潮吹,内射,口交,乳交,肛交,群交,颜射,骑乘,后入,传教士,开腿,强奸,乱伦,触手,扶他,束缚,本子,里番,工口,H场景"
   },
   "r2_access_key_id": {
     "description": "R2 访问密钥 ID",

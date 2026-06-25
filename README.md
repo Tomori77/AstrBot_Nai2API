@@ -1,6 +1,9 @@
 # astrbot_plugin_nai2api
 
-通过 [Nai2API](https://github.com/STA1N156/Nai2API) 网关调用 NovelAI 生成图片的 AstrBot 插件。
+基于 [helloWKQ/AstrBot_Nai2API](https://github.com/helloWKQ/AstrBot_Nai2API) 修改增强的 AstrBot 生图插件，
+感谢原作者的贡献 🙏
+
+通过 [Nai2API](https://github.com/STA1N156/Nai2API) 网关调用 NovelAI 生成图片。
 
 ## 功能
 
@@ -10,11 +13,14 @@
 - 支持普通/2K/4K 分辨率
 - 图片本地缓存，自动清理
 - 配套人格提示词（生图助手），无需手动写英文标签
+- **NSFW 自动检测** — 命中关键词或 `--nsfw` 标记的图片自动上传 Cloudflare R2 图床并发送链接
+- **私聊/群聊白名单** — 限制指定 QQ 号或群号使用插件
 
 ## 前置要求
 
 - 运行中的 [Nai2API](https://github.com/STA1N156/Nai2API) 服务
 - Nai2API 用户密钥（`STA1N-xxx` 格式，在 Nai2API 后台生成）
+- （可选）Cloudflare R2 存储桶 — 用于 NSFW 图片自动上传图床
 
 ## 安装
 
@@ -39,12 +45,43 @@
 | `default_noise_schedule` | 默认噪声调度 | `karras` |
 | `timeout` | 请求超时(秒) | `120` |
 | `llm_tool_enabled` | 允许 LLM 调用生图（AI 助手需要） | `true` |
-| `allow_2k` | 允许生成 2K 图片（关闭后自动降级为普通尺寸，防误扣 15 点） | `true` |
-| `allow_4k` | 允许生成 4K 图片（关闭后自动降级为普通尺寸，防误扣 25 点） | `true` |
-| `max_cached_images` | 图片最大缓存数 | `50` |
+| `allow_2k` | 允许生成 2K 图片 | `true` |
+| `allow_4k` | 允许生成 4K 图片 | `true` |
+| `max_cached_images` | 本地图片最大缓存数 | `30` |
+| `nsfw_to_link` | NSFW 图片转图床链接 | `true` |
+| `nsfw_keywords` | NSFW 关键词（逗号分隔，可直接编辑） | 预填完整词表 |
+| `private_whitelist` | 私聊白名单（QQ 号，逗号分隔，空=全部启用） | `111` |
+| `group_whitelist` | 群聊白名单（群号，逗号分隔，空=全部启用） | `111` |
+| `r2_access_key_id` | R2 访问密钥 ID（必填以启用图床） | 空 |
+| `r2_secret_access_key` | R2 机密访问密钥 | 空 |
+| `r2_s3_endpoint` | R2 S3 终结点 | 空 |
+| `r2_bucket` | R2 存储桶名 | 空 |
+| `r2_public_base_url` | R2 公开访问基址（绑定域名或 r2.dev 链接） | 空 |
+| `r2_storage_prefix` | R2 存储目录 | `qbotimage` |
+| `r2_max_cached` | R2 图片最大缓存数 | `30` |
 
 > **重要**：如果要让 AI 助手自动调用生图，请确保 `llm_tool_enabled` 为 `true`，
 > 并启用 AstrBot 人格中引用的生图助手人格提示词。
+
+### NSFW → 图床链接配置
+
+当 `nsfw_to_link` 开启时，命中 NSFW 关键词或带 `--nsfw` 标记的图片不会直接发送，
+而是上传到 Cloudflare R2 并发送公开链接。需配齐以下五项 R2 凭证：
+
+```
+r2_access_key_id      → Cloudflare R2 的 Access Key ID
+r2_secret_access_key  → Cloudflare R2 的 Secret Access Key
+r2_s3_endpoint        → 管辖权终结点，如 https://<accountid>.r2.cloudflarestorage.com
+r2_bucket             → R2 存储桶名
+r2_public_base_url    → 绑定域名如 https://img.example.com，或 R2 默认 pub-xxx.r2.dev
+```
+
+未配置 R2 时，NSFW 图片会提示并丢弃，不会发送。
+
+### 白名单配置
+
+`private_whitelist` 和 `group_whitelist` 默认填 `111`（示例 ID），
+需改成你自己的 QQ 号或群号，多个用逗号分隔。留空则全部启用。
 
 ---
 
@@ -89,6 +126,15 @@ AI → 自动调用 nai_generate 生成图片
 ```
 
 > 不写尺寸就是竖图。
+
+**NSFW 标记** — 强制走图床链接：
+
+```
+/nai 1girl, nude --nsfw
+/nai 1girl, nude --nsfw --name 猫娘
+```
+
+> 不带 `--nsfw` 时仅靠关键词自动判定。`--name` 指定图床文件名简称。
 
 **使用预设** — 预设就是一组提前配好的"质量前缀"：
 
@@ -260,6 +306,8 @@ AI：来啦，正在用 AI 画笔创作... 🖌️
 | `negative` | string | 否 | 负面提示词，留空用默认 |
 | `preset` | string | 否 | 预设名称，如"高质量"、"动漫风"、"GalGame风" |
 | `seed` | int | 否 | 随机种子，0 表示自动随机 |
+| `nsfw` | bool | 否 | 是否标记为 NSFW，true 时图片走图床链接 |
+| `name` | string | 否 | 图片简称，用于 R2 命名，留空自动从 prompt 提取 |
 
 **参数优先级**：`artist` > `preset` > 默认（2.5D唯美风）
 
@@ -298,6 +346,14 @@ AI：来啦，正在用 AI 画笔创作... 🖌️
 
 ---
 
+## 鸣谢
+
+- [helloWKQ/AstrBot_Nai2API](https://github.com/helloWKQ/AstrBot_Nai2API) — 本插件的原始版本，感谢原作者的贡献
+- [STA1N156/Nai2API](https://github.com/STA1N156/Nai2API) — Nai2API 网关服务
+- [AstrBot](https://github.com/AstrBotDevs/AstrBot) — AstrBot 机器人框架
+
+---
+
 ## 目录结构
 
 ```
@@ -310,6 +366,8 @@ astrbot_plugin_nai2api/
 ├── core/
 │   ├── nai2api_client.py   # Nai2API 客户端（/generate 请求）
 │   ├── image_manager.py    # 图片保存和缓存管理
+│   ├── nsfw_checker.py     # NSFW 关键词判定器
+│   ├── r2_uploader.py      # Cloudflare R2 图床上传
 │   └── preset_manager.py   # 预设加载和保存
 └── persona/
     └── nai_artist_persona.md  # 生图助手人格提示词（System Prompt）
